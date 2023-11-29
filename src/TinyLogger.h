@@ -28,6 +28,39 @@ public:
     this->level = level;
   }
 
+  void lock() {
+#if defined(ESP32)
+    this->locked = true;
+    this->lockedTime = millis();
+#endif
+  }
+
+  void unlock() {
+#if defined(ESP32)
+    this->locked = false;
+#endif
+  }
+
+  bool isLocked() {
+#if defined(ESP32)
+    if (this->locked) {
+      if (millis() - this->lockedTime >= this->lockTimeout) {
+        this->unlock();
+      }
+    }
+
+    return this->locked;
+#else
+    return false;
+#endif
+  }
+
+  void setLockTimeout(unsigned short val) {
+#if defined(ESP32)
+    this->lockTimeout = val;
+#endif
+  }
+
   void addStream(Stream* stream) {
     this->streams.push_back(stream);
   }
@@ -102,6 +135,13 @@ public:
     return this->levelTemplate;
   }
 
+
+  void flush() {
+    for (Stream* stream : this->streams) {
+      stream->flush();
+    }
+  }
+
   template <class T> void print(T msg) {
     for (Stream* stream : this->streams) {
       stream->print(msg);
@@ -168,6 +208,14 @@ public:
       return;
     }
 
+#if defined(ESP32)
+    while (this->isLocked()) {
+      yield();
+    }
+
+    this->lock();
+#endif
+
     if (this->dateTemplate != nullptr) {
       struct tm* tm = nullptr;
       if (this->isDateSet()) {
@@ -198,6 +246,11 @@ public:
     if (nl) {
       this->print(this->nlChar);
     }
+
+    this->flush();
+#if defined(ESP32)
+    this->unlock();
+#endif
   }
 
   template <class T, typename... Args> void fatal(T msg, Args... args) {
@@ -353,6 +406,11 @@ protected:
   std::vector<Stream*> streams;
   Level level = Level::ERROR;
   struct tm* date = nullptr;
+#if defined(ESP32)
+  bool locked = false;
+  unsigned short lockTimeout = 1000;
+  unsigned long lockedTime = 0;
+#endif
 #if TINYLOGGER_NTPCLIENT
   NTPClient* ntpClient = nullptr;
 #endif
