@@ -135,6 +135,30 @@ public:
     return this->levelTemplate;
   }
 
+  const char* getMsgPrefix() {
+    return this->msgPrefix;
+  }
+
+  void setMsgPrefix() {
+    this->msgPrefix = nullptr;
+  }
+
+  void setMsgPrefix(const char* value) {
+    this->msgPrefix = value;
+  }
+
+  const char* getMsgSuffix() {
+    return this->msgSuffix;
+  }
+
+  void setMsgSuffix() {
+    this->msgSuffix = nullptr;
+  }
+
+  void setMsgSuffix(const char* value) {
+    this->msgSuffix = value;
+  }
+
 
   void flush() {
     for (Stream* stream : this->streams) {
@@ -176,7 +200,9 @@ public:
     }
   }
 
-  void printService(const char* service) {
+  void printService(nullptr_t service) {}
+
+  virtual void printService(const char* service) {
     if (service != nullptr && strlen(service) > 0) {
       if (this->serviceDelim != nullptr && strlen(this->serviceDelim) > 0 && strstr(service, this->serviceDelim) != NULL) {
         char* tmp = strdup(service);
@@ -194,13 +220,44 @@ public:
     }
   }
 
-  void printService(const __FlashStringHelper* service) {
+  virtual void printService(const __FlashStringHelper* service) {
     PGM_P pService = reinterpret_cast<PGM_P>(service);
 
     char buffer[strlen_P(pService) + 1];
     strcpy_P(buffer, pService);
 
     return this->printService(buffer);
+  }
+
+  virtual void printLevel(Level level) {
+    const __FlashStringHelper* str;
+
+    switch (level) {
+      default:
+      case Level::SILENT:
+        str = F("SILENT");
+        break;
+      case Level::FATAL:
+        str = F("FATAL");
+        break;
+      case Level::ERROR:
+        str = F("ERROR");
+        break;
+      case Level::WARNING:
+        str = F("WARN");
+        break;
+      case Level::INFO:
+        str = F("INFO");
+        break;
+      case Level::TRACE:
+        str = F("TRACE");
+        break;
+      case Level::VERBOSE:
+        str = F("VERB");
+        break;
+    }
+
+    this->printf(this->levelTemplate, str);
   }
 
   template <class ST, class MT, typename... Args> void printFormatted(Level level, ST service, bool nl, MT msg, Args... args) {
@@ -238,10 +295,18 @@ public:
       }
     }
 
-    this->printService(service);    
-    this->printf(this->levelTemplate, TinyLogger::level2str(level));
-    this->print(" ");
+    this->printService(service);
+    this->printLevel(level);
+
+    if (this->msgPrefix) {
+      this->print(this->msgPrefix);
+    }
+
     this->printf(msg, args...);
+
+    if (this->msgSuffix != nullptr) {
+      this->print(this->msgSuffix);
+    }
 
     if (nl) {
       this->print(this->nlChar);
@@ -371,37 +436,6 @@ public:
     this->printFormatted(Level::VERBOSE, service, true, msg, args...);
   }
 
-  static String level2str(Level level, const char* prefix = nullptr, const char* suffix = nullptr) {
-    const char* str;
-
-    switch (level) {
-      default:
-      case Level::SILENT:
-        str = PSTR("SILENT");
-        break;
-      case Level::FATAL:
-        str = PSTR("FATAL");
-        break;
-      case Level::ERROR:
-        str = PSTR("ERROR");
-        break;
-      case Level::WARNING:
-        str = PSTR("WARN");
-        break;
-      case Level::INFO:
-        str = PSTR("INFO");
-        break;
-      case Level::TRACE:
-        str = PSTR("TRACE");
-        break;
-      case Level::VERBOSE:
-        str = PSTR("VERB");
-        break;
-    }
-
-    return str;
-  }
-
 protected:
   std::vector<Stream*> streams;
   Level level = Level::ERROR;
@@ -419,6 +453,8 @@ protected:
   const char* serviceDelim = ".";
   const char* levelTemplate = "[%s]";
   const char* nlChar = "\r\n";
+  const char* msgPrefix = " ";
+  const char* msgSuffix = nullptr;
 };
 
 TinyLogger Log = TinyLogger();
