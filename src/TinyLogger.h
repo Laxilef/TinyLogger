@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <Arduino.h>
+#include <mutex>
 
 #ifndef TINYLOGGER_NTPCLIENT
   #define TINYLOGGER_NTPCLIENT false
@@ -26,39 +27,6 @@ public:
   void begin(Stream* stream, Level level = Level::ERROR) {
     this->streams.push_back(stream);
     this->level = level;
-  }
-
-  void lock() {
-#if defined(ESP32)
-    this->locked = true;
-    this->lockedTime = millis();
-#endif
-  }
-
-  void unlock() {
-#if defined(ESP32)
-    this->locked = false;
-#endif
-  }
-
-  bool isLocked() {
-#if defined(ESP32)
-    if (this->locked) {
-      if (millis() - this->lockedTime >= this->lockTimeout) {
-        this->unlock();
-      }
-    }
-
-    return this->locked;
-#else
-    return false;
-#endif
-  }
-
-  void setLockTimeout(unsigned short val) {
-#if defined(ESP32)
-    this->lockTimeout = val;
-#endif
   }
 
   void addStream(Stream* stream) {
@@ -265,13 +233,7 @@ public:
       return;
     }
 
-#if defined(ESP32)
-    while (this->isLocked()) {
-      yield();
-    }
-
-    this->lock();
-#endif
+    std::lock_guard<std::mutex> lock(this->streamMutex);
 
     if (this->dateTemplate != nullptr) {
       struct tm* tm = nullptr;
@@ -313,9 +275,6 @@ public:
     }
 
     this->flush();
-#if defined(ESP32)
-    this->unlock();
-#endif
   }
 
   template <class T, typename... Args> void fatal(T msg, Args... args) {
@@ -440,11 +399,7 @@ protected:
   std::vector<Stream*> streams;
   Level level = Level::ERROR;
   struct tm* date = nullptr;
-#if defined(ESP32)
-  bool locked = false;
-  unsigned short lockTimeout = 1000;
-  unsigned long lockedTime = 0;
-#endif
+  std::mutex streamMutex;
 #if TINYLOGGER_NTPCLIENT
   NTPClient* ntpClient = nullptr;
 #endif
@@ -457,5 +412,5 @@ protected:
   const char* msgSuffix = nullptr;
 };
 
-TinyLogger Log = TinyLogger();
+TinyLogger Log;
 extern TinyLogger Log;
