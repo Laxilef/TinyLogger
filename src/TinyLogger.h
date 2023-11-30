@@ -1,6 +1,10 @@
 #pragma once
-#include <vector>
 #include <Arduino.h>
+#include <vector>
+#if defined(ARDUINO_ARCH_ESP32)
+  #include <mutex>
+  #include <chrono>
+#endif
 
 #ifndef TINYLOGGER_NTPCLIENT
   #define TINYLOGGER_NTPCLIENT false
@@ -9,6 +13,7 @@
 #if TINYLOGGER_NTPCLIENT
   #include <NTPClient.h>
 #endif
+
 
 class TinyLogger {
 public:
@@ -23,42 +28,39 @@ public:
     VERBOSE
   };
 
+  TinyLogger() {
+#if defined(ARDUINO_ARCH_ESP32)
+    this->mutex = new std::timed_mutex();
+#endif
+  }
+
+  ~TinyLogger() {
+#if defined(ARDUINO_ARCH_ESP32)
+    delete this->mutex;
+#endif
+  }
+
   void begin(Stream* stream, Level level = Level::ERROR) {
     this->streams.push_back(stream);
     this->level = level;
   }
 
-  void lock() {
-#if defined(ESP32)
-    this->locked = true;
-    this->lockedTime = millis();
+  bool lock() {
+#if defined(ARDUINO_ARCH_ESP32)
+    return this->mutex->try_lock_for(std::chrono::milliseconds(this->lockTimeout));
+#else
+    return true;
 #endif
   }
 
   void unlock() {
-#if defined(ESP32)
-    this->locked = false;
-#endif
-  }
-
-  bool isLocked() {
-#if defined(ESP32)
-    if (this->locked) {
-      if (millis() - this->lockedTime >= this->lockTimeout) {
-        this->unlock();
-      }
-    }
-
-    return this->locked;
-#else
-    return false;
+#if defined(ARDUINO_ARCH_ESP32)
+    this->mutex->unlock();
 #endif
   }
 
   void setLockTimeout(unsigned short val) {
-#if defined(ESP32)
     this->lockTimeout = val;
-#endif
   }
 
   void addStream(Stream* stream) {
@@ -265,13 +267,9 @@ public:
       return;
     }
 
-#if defined(ESP32)
-    while (this->isLocked()) {
+    while(!this->lock()) {
       yield();
     }
-
-    this->lock();
-#endif
 
     if (this->dateTemplate != nullptr) {
       struct tm* tm = nullptr;
@@ -313,9 +311,7 @@ public:
     }
 
     this->flush();
-#if defined(ESP32)
     this->unlock();
-#endif
   }
 
   template <class T, typename... Args> void fatal(T msg, Args... args) {
@@ -440,11 +436,10 @@ protected:
   std::vector<Stream*> streams;
   Level level = Level::ERROR;
   struct tm* date = nullptr;
-#if defined(ESP32)
-  bool locked = false;
-  unsigned short lockTimeout = 1000;
-  unsigned long lockedTime = 0;
+#if defined(ARDUINO_ARCH_ESP32)
+  mutable std::timed_mutex* mutex;
 #endif
+  unsigned short lockTimeout = 1000;
 #if TINYLOGGER_NTPCLIENT
   NTPClient* ntpClient = nullptr;
 #endif
