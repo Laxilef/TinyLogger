@@ -47,7 +47,7 @@ public:
 
   bool lock() {
 #if defined(ARDUINO_ARCH_ESP32)
-    return this->mutex->try_lock_for(std::chrono::milliseconds(this->lockTimeout));
+    return this->mutex->try_lock_for(std::chrono::milliseconds(this->tryLockTimeout));
 #else
     return true;
 #endif
@@ -59,8 +59,8 @@ public:
 #endif
   }
 
-  void setLockTimeout(unsigned short val) {
-    this->lockTimeout = val;
+  void setTryLockTimeout(unsigned short val) {
+    this->tryLockTimeout = val;
   }
 
   void addStream(Stream* stream) {
@@ -439,7 +439,7 @@ protected:
 #if defined(ARDUINO_ARCH_ESP32)
   mutable std::timed_mutex* mutex;
 #endif
-  unsigned short lockTimeout = 1000;
+  unsigned short tryLockTimeout = 50;
 #if TINYLOGGER_NTPCLIENT
   NTPClient* ntpClient = nullptr;
 #endif
