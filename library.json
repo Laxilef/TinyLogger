@@ -13,5 +13,5 @@
     "dependencies": {},
     "frameworks": "arduino",
     "platforms": "*",
-    "version": "1.0.7"
+    "version": "1.0.8"
 }
