@@ -6,14 +6,6 @@
   #include <chrono>
 #endif
 
-#ifndef TINYLOGGER_NTPCLIENT
-  #define TINYLOGGER_NTPCLIENT false
-#endif
-
-#if TINYLOGGER_NTPCLIENT
-  #include <NTPClient.h>
-#endif
-
 
 class TinyLogger {
 public:
@@ -95,26 +87,16 @@ public:
     return this->date != nullptr;
   }
 
-#if TINYLOGGER_NTPCLIENT
-  void setNtpClient(NTPClient* ntpClient) {
-    this->ntpClient = ntpClient;
+  void setDateCallback(std::function<tm()> callback) {
+    this->dateCallback = callback;
   }
 
-  void setNtpClient() {
-    this->ntpClient = nullptr;
+  void setDateCallback() {
+    this->dateCallback = nullptr;
   }
 
-  bool isNtpClientSet() {
-    return this->ntpClient != nullptr;
-  }
-#endif
-
-  const char* getServiceTemplate() {
-    return this->serviceTemplate;
-  }
-
-  void setServiceTemplate(const char* value) {
-    this->serviceTemplate = value;
+  bool isDateCallbackSet() {
+    return this->dateCallback != nullptr;
   }
 
   const char* getServiceDelimiter() {
@@ -122,7 +104,7 @@ public:
   }
 
   void setServiceDelimiter(const char* value) {
-    this->serviceTemplate = value;
+    this->serviceDelim = value;
   }
 
   void setServiceDelimiter() {
@@ -135,6 +117,22 @@ public:
 
   const char* getLevelTemplate() {
     return this->levelTemplate;
+  }
+
+  const char* getDateTemplate() {
+    return this->dateTemplate;
+  }
+
+  void setDateTemplate(const char* value) {
+    this->dateTemplate = value;
+  }
+
+  const char* getServiceTemplate() {
+    return this->serviceTemplate;
+  }
+
+  void setServiceTemplate(const char* value) {
+    this->serviceTemplate = value;
   }
 
   const char* getMsgPrefix() {
@@ -277,19 +275,16 @@ public:
         tm = this->date;
       }
 
-#if TINYLOGGER_NTPCLIENT
-      if (tm == nullptr && this->isNtpClientSet()) {
-        time_t now = this->ntpClient->getEpochTime();
-        tm = localtime(&now);
+      if (tm == nullptr && this->isDateCallbackSet()) {
+        struct tm cTm = this->dateCallback();
+        tm = &cTm;
       }
-#endif
 
       if (tm != nullptr) {
-        char* buffer = new char[64];
+        char buffer[64];
         if (strftime(buffer, sizeof(buffer), this->dateTemplate, tm) != 0) {
           this->print(buffer);
         }
-        delete[] buffer;
       }
     }
 
@@ -440,9 +435,7 @@ protected:
   mutable std::timed_mutex* mutex;
 #endif
   unsigned short tryLockTimeout = 50;
-#if TINYLOGGER_NTPCLIENT
-  NTPClient* ntpClient = nullptr;
-#endif
+  std::function<tm()> dateCallback = nullptr;
   const char* dateTemplate = "[%d.%m.%Y %H:%M:%S]";
   const char* serviceTemplate = "[%s]";
   const char* serviceDelim = ".";

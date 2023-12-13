@@ -10,9 +10,7 @@
         "type": "git",
         "url": "https://github.com/laxilef/TinyLogger.git"
     },
-    "dependencies": {
-        "arduino-libraries/NTPClient": "^3.2.1"
-    },
+    "dependencies": {},
     "frameworks": "arduino",
     "platforms": "*",
     "version": "1.0.7"
