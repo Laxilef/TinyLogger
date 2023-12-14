@@ -3,7 +3,18 @@
 
 void setup() {
   Serial.begin(115200);
-  Log.begin(&Serial, TinyLogger::Level::VERBOSE);
+  Log.addStream(&Serial);
+  
+  Log.setLevel(TinyLogger::Level::VERBOSE);
+  Log.setDateTemplate("\033[1m[%H:%M:%S]\033[22m");
+  Log.setDateCallback([] {
+    unsigned int time = millis() / 1000;
+    int sec = time % 60;
+    int min = time % 3600 / 60;
+    int hour = time / 3600;
+    
+    return tm{sec, min, hour};
+  });
 }
 
 unsigned long prevReport = 0;
