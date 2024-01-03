@@ -275,8 +275,9 @@ public:
         tm = this->date;
       }
 
+      struct tm cTm;
       if (tm == nullptr && this->isDateCallbackSet()) {
-        struct tm cTm = this->dateCallback();
+        cTm = this->dateCallback();
         tm = &cTm;
       }
 
