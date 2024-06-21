@@ -249,6 +249,9 @@ public:
       case Level::INFO:
         str = F("INFO");
         break;
+      case Level::NOTICE:
+        str = F("NOTICE");
+        break;
       case Level::TRACE:
         str = F("TRACE");
         break;
