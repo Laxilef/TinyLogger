@@ -6,20 +6,28 @@
   #include <chrono>
 #endif
 
+enum class TinyLoggerLevel : uint8_t {
+  SILENT,
+  FATAL,
+  ERROR,
+  WARNING,
+  INFO,
+  NOTICE,
+  TRACE,
+  VERBOSE
+};
 
-class TinyLogger {
+auto operator<=>(TinyLoggerLevel level, uint8_t val) {
+  return (static_cast<uint8_t>(level) <=> val);
+}
+
+auto operator==(TinyLoggerLevel level, uint8_t val) {
+  return (level <=> val) == std::strong_ordering::equal;
+}
+
+
+template <typename THandler = Print> class TinyLogger {
 public:
-  enum Level {
-    SILENT,
-    FATAL,
-    ERROR,
-    WARNING,
-    INFO,
-    NOTICE,
-    TRACE,
-    VERBOSE
-  };
-
   TinyLogger() {
 #if defined(ARDUINO_ARCH_ESP32)
     this->mutex = new std::timed_mutex();
@@ -32,8 +40,8 @@ public:
 #endif
   }
 
-  void begin(Stream* stream, Level level = Level::ERROR) {
-    this->streams.push_back(stream);
+  void begin(THandler* handler, TinyLoggerLevel level = TinyLoggerLevel::ERROR) {
+    this->handlers.push_back(handler);
     this->level = level;
   }
 
@@ -55,23 +63,23 @@ public:
     this->tryLockTimeout = val;
   }
 
-  void addStream(Stream* stream) {
-    this->streams.push_back(stream);
+  void addHandler(THandler* handler) {
+    this->handlers.push_back(handler);
   }
 
-  void clearStreams() {
-    this->streams.clear();
+  void clearHandlers() {
+    this->handlers.clear();
   }
 
-  const std::vector<Stream*> getStreams() {
-    return this->streams;
+  const std::vector<THandler*> getHandlers() {
+    return this->handlers;
   }
 
-  Level getLevel() {
+  TinyLoggerLevel getLevel() {
     return this->level;
   }
 
-  void setLevel(Level level) {
+  void setLevel(TinyLoggerLevel level) {
     this->level = level;
   }
 
@@ -161,41 +169,41 @@ public:
 
 
   void flush() {
-    for (Stream* stream : this->streams) {
-      stream->flush();
+    for (THandler* handler : this->handlers) {
+      handler->flush();
     }
   }
 
   template <class T> void print(T msg) {
-    for (Stream* stream : this->streams) {
-      stream->print(msg);
+    for (THandler* handler : this->handlers) {
+      handler->print(msg);
     }
   }
 
   template <class T> void println(T msg) {
-    for (Stream* stream : this->streams) {
-      stream->println(msg);
+    for (THandler* handler : this->handlers) {
+      handler->println(msg);
     }
   }
 
   template <typename... Args> void printf(const __FlashStringHelper* msg, Args... args) {
-    for (Stream* stream : this->streams) {
+    for (THandler* handler : this->handlers) {
       if (sizeof...(args) > 0) {
-        stream->printf_P(reinterpret_cast<PGM_P>(msg), args...);
+        handler->printf_P(reinterpret_cast<PGM_P>(msg), args...);
 
       } else {
-        stream->print(msg);
+        handler->print(msg);
       }
     }
   }
 
   template <class T, typename... Args> void printf(T msg, Args... args) {
-    for (Stream* stream : this->streams) {
+    for (THandler* handler : this->handlers) {
       if (sizeof...(args) > 0) {
-        stream->printf(msg, args...);
+        handler->printf(msg, args...);
         
       } else {
-        stream->print(msg);
+        handler->print(msg);
       }
     }
   }
@@ -229,33 +237,33 @@ public:
     return this->printService(buffer);
   }
 
-  virtual void printLevel(Level level) {
+  virtual void printLevel(TinyLoggerLevel level) {
     const __FlashStringHelper* str;
 
     switch (level) {
       default:
-      case Level::SILENT:
+      case TinyLoggerLevel::SILENT:
         str = F("SILENT");
         break;
-      case Level::FATAL:
+      case TinyLoggerLevel::FATAL:
         str = F("FATAL");
         break;
-      case Level::ERROR:
+      case TinyLoggerLevel::ERROR:
         str = F("ERROR");
         break;
-      case Level::WARNING:
+      case TinyLoggerLevel::WARNING:
         str = F("WARN");
         break;
-      case Level::INFO:
+      case TinyLoggerLevel::INFO:
         str = F("INFO");
         break;
-      case Level::NOTICE:
+      case TinyLoggerLevel::NOTICE:
         str = F("NOTICE");
         break;
-      case Level::TRACE:
+      case TinyLoggerLevel::TRACE:
         str = F("TRACE");
         break;
-      case Level::VERBOSE:
+      case TinyLoggerLevel::VERBOSE:
         str = F("VERB");
         break;
     }
@@ -263,7 +271,7 @@ public:
     this->printf(this->levelTemplate, str);
   }
 
-  template <class ST, class MT, typename... Args> void printFormatted(Level level, ST service, bool nl, MT msg, Args... args) {
+  template <class ST, class MT, typename... Args> void printFormatted(TinyLoggerLevel level, ST service, bool nl, MT msg, Args... args) {
     if (level > this->level) {
       return;
     }
@@ -314,126 +322,126 @@ public:
   }
 
   template <class T, typename... Args> void fatal(T msg, Args... args) {
-    this->printFormatted(Level::FATAL, nullptr, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::FATAL, nullptr, false, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void sfatal(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::FATAL, service, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::FATAL, service, false, msg, args...);
   }
 
   template <class T, typename... Args> void fatalln(T msg, Args... args) {
-    this->printFormatted(Level::FATAL, nullptr, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::FATAL, nullptr, true, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void sfatalln(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::FATAL, service, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::FATAL, service, true, msg, args...);
   }
 
 
   template <class T, typename... Args> void error(T msg, Args... args) {
-    this->printFormatted(Level::ERROR, nullptr, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::ERROR, nullptr, false, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void serror(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::ERROR, service, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::ERROR, service, false, msg, args...);
   }
 
   template <class T, typename... Args> void errorln(T msg, Args... args) {
-    this->printFormatted(Level::ERROR, nullptr, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::ERROR, nullptr, true, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void serrorln(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::ERROR, service, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::ERROR, service, true, msg, args...);
   }
 
 
   template <class T, typename... Args> void warning(T msg, Args... args) {
-    this->printFormatted(Level::WARNING, nullptr, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::WARNING, nullptr, false, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void swarning(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::WARNING, service, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::WARNING, service, false, msg, args...);
   }
 
   template <class T, typename... Args> void warningln(T msg, Args... args) {
-    this->printFormatted(Level::WARNING, nullptr, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::WARNING, nullptr, true, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void swarningln(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::WARNING, service, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::WARNING, service, true, msg, args...);
   }
 
 
   template <class T, typename... Args> void info(T msg, Args... args) {
-    this->printFormatted(Level::INFO, nullptr, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::INFO, nullptr, false, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void sinfo(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::INFO, service, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::INFO, service, false, msg, args...);
   }
 
   template <class T, typename... Args> void infoln(T msg, Args... args) {
-    this->printFormatted(Level::INFO, nullptr, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::INFO, nullptr, true, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void sinfoln(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::INFO, service, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::INFO, service, true, msg, args...);
   }
 
 
   template <class T, typename... Args> void notice(T msg, Args... args) {
-    this->printFormatted(Level::NOTICE, nullptr, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::NOTICE, nullptr, false, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void snotice(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::NOTICE, service, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::NOTICE, service, false, msg, args...);
   }
 
   template <class T, typename... Args> void noticeln(T msg, Args... args) {
-    this->printFormatted(Level::NOTICE, nullptr, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::NOTICE, nullptr, true, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void snoticeln(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::NOTICE, service, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::NOTICE, service, true, msg, args...);
   }
 
 
   template <class T, typename... Args> void trace(T msg, Args... args) {
-    this->printFormatted(Level::TRACE, nullptr, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::TRACE, nullptr, false, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void strace(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::TRACE, service, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::TRACE, service, false, msg, args...);
   }
 
   template <class T, typename... Args> void traceln(T msg, Args... args) {
-    this->printFormatted(Level::TRACE, nullptr, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::TRACE, nullptr, true, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void straceln(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::TRACE, service, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::TRACE, service, true, msg, args...);
   }
 
 
   template <class T, typename... Args> void verbose(T msg, Args... args) {
-    this->printFormatted(Level::VERBOSE, nullptr, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::VERBOSE, nullptr, false, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void sverbose(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::VERBOSE, service, false, msg, args...);
+    this->printFormatted(TinyLoggerLevel::VERBOSE, service, false, msg, args...);
   }
 
   template <class T, typename... Args> void verboseln(T msg, Args... args) {
-    this->printFormatted(Level::VERBOSE, nullptr, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::VERBOSE, nullptr, true, msg, args...);
   }
 
   template <class ST, class MT, typename... Args> void sverboseln(ST service, MT msg, Args... args) {
-    this->printFormatted(Level::VERBOSE, service, true, msg, args...);
+    this->printFormatted(TinyLoggerLevel::VERBOSE, service, true, msg, args...);
   }
 
 protected:
-  std::vector<Stream*> streams;
-  Level level = Level::ERROR;
+  std::vector<THandler*> handlers;
+  TinyLoggerLevel level = TinyLoggerLevel::ERROR;
   struct tm* date = nullptr;
 #if defined(ARDUINO_ARCH_ESP32)
   mutable std::timed_mutex* mutex;
@@ -449,5 +457,15 @@ protected:
   const char* msgSuffix = nullptr;
 };
 
-TinyLogger Log = TinyLogger();
-extern TinyLogger Log;
+#ifndef TINYLOGGER_GLOBAL_NAME
+  #define TINYLOGGER_GLOBAL_NAME Log
+#endif
+
+#ifndef TINYLOGGER_GLOBAL_HANDLER
+  #define TINYLOGGER_GLOBAL_HANDLER Print
+#endif
+
+#ifdef TINYLOGGER_GLOBAL
+  auto TINYLOGGER_GLOBAL_NAME = TinyLogger<TINYLOGGER_GLOBAL_HANDLER>();
+  extern TinyLogger<TINYLOGGER_GLOBAL_HANDLER> TINYLOGGER_GLOBAL_NAME;
+#endif
